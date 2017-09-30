@@ -23,133 +23,53 @@ class _ScannerIterator implements Iterator<Token> {
       : _scanner = new SpanScanner(dx, sourceUrl: sourceUrl);
 
   final SpanScanner _scanner;
-  ScannerContext _context = ScannerContext.$root;
 
   @override
-  Token get current => _buffer[_index];
-  int _index = 0;
-  List<Token> _buffer = <Token>[];
+  Token get current => _current;
+  Token _current;
 
   @override
   bool moveNext() {
-    if (_index < _buffer.length - 1) {
-      _index++;
-      return true;
-    }
-    _buffer.clear();
-    _index = 0;
-
     _consumeWhitespace();
 
     if (_scanner.isDone) {
       return false;
     }
 
-    switch (_context) {
-      case ScannerContext.$root:
-        return _scanRoot();
-      case ScannerContext.$import:
-        return _scanImport();
-      case ScannerContext.$widget:
-        return _scanWidget();
-      case ScannerContext.$state:
-        return _scanState();
-      case ScannerContext.$build:
-        return _scanBuild();
+    if (!_scanNext()) {
+      _scanner.expectDone();
     }
 
-    _scanner.expectDone();
+    return true;
+  }
+
+  bool _scanNext() =>
+    _scanKeyword() ||
+    _scanIdentifier() ||
+    _scanSyntax();
+
+  bool _scanKeyword() {
+    if (_scanner.scan(_Patterns.keyword)) {
+      _current = Keyword.lookupByName(_lastString);
+      return true;
+    }
     return false;
   }
 
-  bool _scanRoot() =>
-    _scanImportStart() ||
-    _scanWidgetStart();
-
-  bool _scanImportStart() {
-    if (!_scanKeywordBlockStart(Keyword.$import)) {
-      return false;
-    }
-    _context = ScannerContext.$import;
-    return true;
-  }
-
-  bool  _scanWidgetStart() {
-    if (!_scanKeywordBlockStart(Keyword.$widget)) {
-      return false;
-    }
-    _context = ScannerContext.$widget;
-    return true;
-  }
-
-  bool  _scanStateStart() {
-    if (!_scanKeywordBlockStart(Keyword.$state)) {
-      return false;
-    }
-    _context = ScannerContext.$state;
-    return true;
-  }
-
-  bool  _scanBuildStart() {
-    if (!_scanKeywordBlockStart(Keyword.$build)) {
-      return false;
-    }
-    _context = ScannerContext.$build;
-    return true;
-  }
-
-  bool _scanKeywordBlockStart(Keyword keyword) {
-    if (!_scanner.scan(keyword.keyword)) {
-      return false;
-    }
-    _emit(keyword);
-    _consumeWhitespace();
-    _scanner.expectChar($open_brace);
-    _emit(Syntax.$openBrace);
-    return true;
-  }
-
-  bool _scanImport() {
-    if (_scanner.scanChar($close_brace)) {
-      _emit(Syntax.$closeBrace);
-      _context = ScannerContext.$root;
-    } else {
-      _scanner.expect(_Patterns.$import);
-      final lastSpan = _scanner.lastSpan;
-      _emit(new LibraryImport(_scanner.substring(lastSpan.start.offset, lastSpan.end.offset)));
-    }
-    return true;
-  }
-
-  bool _scanWidget() {
-    if (_scanner.scanChar($close_brace)) {
-      _emit(Syntax.$closeBrace);
-      _context = ScannerContext.$root;
-      return true;
-    } else if (_scanStateStart() || _scanBuildStart()) {
+  bool _scanIdentifier() {
+    if (_scanner.scan(_Patterns.identifier)) {
+      _current = new Identifier(_lastString);
       return true;
     }
-    throw _scanner.error('Widget block ended unexpectedly.');
+    return false;
   }
 
-  bool _scanState() {
-    // TODO: implement
-    _scanner.expectChar($close_brace);
-    _emit(Syntax.$closeBrace);
-    _context = ScannerContext.$widget;
-    return true;
-  }
-
-  bool _scanBuild() {
-    // TODO: implement
-    _scanner.expectChar($close_brace);
-    _emit(Syntax.$closeBrace);
-    _context = ScannerContext.$widget;
-    return true;
-  }
-
-  void _emit(Token token) {
-    _buffer.add(token);
+  bool _scanSyntax() {
+    if (_scanner.scan(_Patterns.syntax)) {
+      _current = Syntax.lookupByName(_lastString);
+      return true;
+    }
+    return false;
   }
 
   void _consumeWhitespace() {
@@ -157,21 +77,8 @@ class _ScannerIterator implements Iterator<Token> {
       _scanner.readChar();
     }
   }
-}
 
-enum ScannerContext {
-  $root,
-  $import,
-  $widget,
-  $state,
-  $build,
-}
-
-class _Keyword {
-  static const $import = 'import';
-  static const $widget = 'widget';
-  static const $state = 'state';
-  static const $build = 'build';
+  String get _lastString => _scanner.lastMatch.group(0);
 }
 
 abstract class Token {
@@ -183,46 +90,101 @@ abstract class Token {
   }
 }
 
-class LibraryImport extends Token {
-  const LibraryImport(this.path);
+class Identifier extends Token {
+  const Identifier(this.name);
 
-  final String path;
+  final String name;
 
   @override
-  String toString() => '${runtimeType}';
+  String toString() => '${runtimeType}(${name})';
 }
 
 class Keyword extends Token {
-  static const $import = const Keyword(_Keyword.$import);
-  static const $widget = const Keyword(_Keyword.$widget);
-  static const $state = const Keyword(_Keyword.$state);
-  static const $build = const Keyword(_Keyword.$build);
+  static const $import = const Keyword('import');
+  static const $widget = const Keyword('widget');
+  static const $state = const Keyword('state');
+  static const $build = const Keyword('build');
 
-  const Keyword(this.keyword);
+  static const List<Keyword> values = const <Keyword>[
+    $import,
+    $widget,
+    $state,
+    $build,
+  ];
 
-  final String keyword;
+  static final List<String> names = new List.unmodifiable(values.map((k) => k.name));
+
+  const Keyword(this.name);
+
+  static final Map<String, Keyword> _nameToKeyword = new Map<String, Keyword>.fromIterable(
+    Keyword.values,
+    key: (k) => k.name,
+  );
+
+  static final Map<Keyword, String> _keywordToName = new Map<Keyword, String>.fromIterable(
+    Keyword.values,
+    value: (k) => k.name,
+  );
+
+  static Keyword lookupByName(String name) {
+    assert(name != null);
+    return _nameToKeyword[name];
+  }
+
+  final String name;
 
   @override
-  String toString() => '${runtimeType}("${keyword}")';
+  String toString() => '${runtimeType}("${name}")';
 }
 
 class Syntax extends Token {
-  static const $openBrace = const Syntax('{');
-  static const $closeBrace = const Syntax('}');
-  static const $openParen = const Syntax('(');
-  static const $closeParen = const Syntax(')');
-  static const $lt = const Syntax('<');
-  static const $gt = const Syntax('>');
-  static const $dot = const Syntax('.');
-  static const $comma = const Syntax(',');
-  static const $assignment = const Syntax('=');
-  static const $equals = const Syntax('==');
-  static const $questionMark = const Syntax('?');
-  static const $exclamationMark = const Syntax('!');
+  static const $openBrace = const Syntax('{', r'\{');
+  static const $closeBrace = const Syntax('}', r'\}');
+  static const $openParen = const Syntax('(', r'\(');
+  static const $closeParen = const Syntax(')', r'\)');
+  static const $lt = const Syntax('<', r'<');
+  static const $gt = const Syntax('>', r'>');
+  static const $dot = const Syntax('.', r'\.');
+  static const $comma = const Syntax(',', r'\,');
+  static const $equals = const Syntax('==', r'==');
+  static const $assignment = const Syntax('=', r'=');
+  static const $questionMark = const Syntax('?', r'\?');
+  static const $exclamationMark = const Syntax('!', r'\!');
+  static const $dollar = const Syntax('!', r'\$');
+  static const $colon = const Syntax(':', r'\:');
+  static const $slash = const Syntax('/', r'/');
 
-  const Syntax(this.token);
+  static const List<Syntax> values = const <Syntax>[
+    $openBrace,
+    $closeBrace,
+    $openParen,
+    $closeParen,
+    $lt,
+    $gt,
+    $dot,
+    $comma,
+    $equals,
+    $assignment,
+    $questionMark,
+    $exclamationMark,
+    $dollar,
+    $colon,
+    $slash,
+  ];
+
+  static final Map<String, Syntax> _nameToSyntax = new Map<String, Syntax>.unmodifiable(
+    new Map<String, Syntax>.fromIterable(
+      values,
+      key: (s) => s.token,
+    )
+  );
+
+  static Syntax lookupByName(String name) => _nameToSyntax[name];
+
+  const Syntax(this.token, this.pattern);
 
   final String token;
+  final String pattern;
 
   @override
   String toString() => '${runtimeType}("${token}")';
@@ -231,6 +193,19 @@ class Syntax extends Token {
 class _Patterns {
   // TODO: this could use some smarts.
   static final $import = new RegExp(r'[\w_/\d\:]+');
+
+  // TODO: check with the spec.
+  static final identifier = new RegExp(
+    r'[a-zA-Z_\$][\w\$]*'
+  );
+
+  static final syntax = new RegExp(
+    Syntax.values.map((s) => s.pattern).join('|')
+  );
+
+  static final keyword = new RegExp(
+    Keyword.names.join('|')
+  );
 }
 
 // The following utilities were borrowed from:
