@@ -1,5 +1,5 @@
 
 import {
-    flutter
-    dart:async
+    flutter;
+    dart:async;
 }
