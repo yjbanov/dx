@@ -9,6 +9,8 @@ environment:
 
 dependencies:
   path: ^1.4.1
+  string_scanner: ^1.0.2
+  charcode: ^1.1.1
 
 dev_dependencies:
   test: ^0.12.0
