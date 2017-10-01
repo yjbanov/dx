@@ -7,6 +7,7 @@ import 'dart:collection';
 import 'package:charcode/ascii.dart';
 import 'package:string_scanner/string_scanner.dart';
 
+/// Extracts syntactic [Token]s from dx source code.
 class Scanner extends IterableBase<Token> implements Iterable<Token> {
   Scanner(this.sourceUrl, this.dx);
 
@@ -17,7 +18,6 @@ class Scanner extends IterableBase<Token> implements Iterable<Token> {
   Iterator<Token> get iterator => new _ScannerIterator(sourceUrl, dx);
 }
 
-/// Produces a stream of [Token]s from dx source code.
 class _ScannerIterator implements Iterator<Token> {
   _ScannerIterator(Uri sourceUrl, String dx)
       : _scanner = new SpanScanner(dx, sourceUrl: sourceUrl);
@@ -50,7 +50,7 @@ class _ScannerIterator implements Iterator<Token> {
 
   bool _scanKeyword() {
     if (_scanner.scan(_Patterns.keyword)) {
-      _current = Keyword.lookupByName(_lastString);
+      _current = Keyword.lookupByName(_scanner.lastMatch.group(1));
       return true;
     }
     return false;
@@ -78,7 +78,7 @@ class _ScannerIterator implements Iterator<Token> {
     }
   }
 
-  String get _lastString => _scanner.lastMatch.group(0);
+  String get _lastString => _scanner.lastMatch[0];
 }
 
 abstract class Token {
@@ -119,11 +119,6 @@ class Keyword extends Token {
   static final Map<String, Keyword> _nameToKeyword = new Map<String, Keyword>.fromIterable(
     Keyword.values,
     key: (k) => k.name,
-  );
-
-  static final Map<Keyword, String> _keywordToName = new Map<Keyword, String>.fromIterable(
-    Keyword.values,
-    value: (k) => k.name,
   );
 
   static Keyword lookupByName(String name) {
@@ -204,7 +199,7 @@ class _Patterns {
   );
 
   static final keyword = new RegExp(
-    Keyword.names.join('|')
+    '(${Keyword.names.join('|')})\\s'
   );
 }
 
