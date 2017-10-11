@@ -7,6 +7,8 @@ import 'dart:collection';
 import 'package:charcode/ascii.dart';
 import 'package:string_scanner/string_scanner.dart';
 
+import 'token.dart';
+
 /// Extracts syntactic [Token]s from dx source code.
 class Scanner extends IterableBase<Token> implements Iterable<Token> {
   Scanner(this.sourceUrl, this.dx);
@@ -46,7 +48,7 @@ class _ScannerIterator implements Iterator<Token> {
   bool _scanNext() =>
     _scanKeyword() ||
     _scanIdentifier() ||
-    _scanSyntax();
+    _scanPunctuation();
 
   bool _scanKeyword() {
     if (_scanner.scan(_Patterns.keyword)) {
@@ -64,9 +66,9 @@ class _ScannerIterator implements Iterator<Token> {
     return false;
   }
 
-  bool _scanSyntax() {
-    if (_scanner.scan(_Patterns.syntax)) {
-      _current = Syntax.lookupByName(_lastString);
+  bool _scanPunctuation() {
+    if (_scanner.scan(_Patterns.punctuation)) {
+      _current = Punctuation.lookupByName(_lastString);
       return true;
     }
     return false;
@@ -81,110 +83,6 @@ class _ScannerIterator implements Iterator<Token> {
   String get _lastString => _scanner.lastMatch[0];
 }
 
-abstract class Token {
-  const Token();
-
-  @override
-  String toString() {
-    throw '$runtimeType forgot to implement toString()';
-  }
-}
-
-class Identifier extends Token {
-  const Identifier(this.name);
-
-  final String name;
-
-  @override
-  String toString() => '${runtimeType}(${name})';
-}
-
-class Keyword extends Token {
-  static const $import = const Keyword('import');
-  static const $widget = const Keyword('widget');
-  static const $state = const Keyword('state');
-  static const $build = const Keyword('build');
-
-  static const List<Keyword> values = const <Keyword>[
-    $import,
-    $widget,
-    $state,
-    $build,
-  ];
-
-  static final List<String> names = new List.unmodifiable(values.map((k) => k.name));
-
-  const Keyword(this.name);
-
-  static final Map<String, Keyword> _nameToKeyword = new Map<String, Keyword>.fromIterable(
-    Keyword.values,
-    key: (k) => k.name,
-  );
-
-  static Keyword lookupByName(String name) {
-    assert(name != null);
-    return _nameToKeyword[name];
-  }
-
-  final String name;
-
-  @override
-  String toString() => '${runtimeType}("${name}")';
-}
-
-class Syntax extends Token {
-  static const $openBrace = const Syntax('{', r'\{');
-  static const $closeBrace = const Syntax('}', r'\}');
-  static const $openParen = const Syntax('(', r'\(');
-  static const $closeParen = const Syntax(')', r'\)');
-  static const $lt = const Syntax('<', r'<');
-  static const $gt = const Syntax('>', r'>');
-  static const $dot = const Syntax('.', r'\.');
-  static const $comma = const Syntax(',', r'\,');
-  static const $equals = const Syntax('==', r'==');
-  static const $assignment = const Syntax('=', r'=');
-  static const $questionMark = const Syntax('?', r'\?');
-  static const $exclamationMark = const Syntax('!', r'\!');
-  static const $dollar = const Syntax('!', r'\$');
-  static const $colon = const Syntax(':', r'\:');
-  static const $slash = const Syntax('/', r'/');
-
-  static const List<Syntax> values = const <Syntax>[
-    $openBrace,
-    $closeBrace,
-    $openParen,
-    $closeParen,
-    $lt,
-    $gt,
-    $dot,
-    $comma,
-    $equals,
-    $assignment,
-    $questionMark,
-    $exclamationMark,
-    $dollar,
-    $colon,
-    $slash,
-  ];
-
-  static final Map<String, Syntax> _nameToSyntax = new Map<String, Syntax>.unmodifiable(
-    new Map<String, Syntax>.fromIterable(
-      values,
-      key: (s) => s.token,
-    )
-  );
-
-  static Syntax lookupByName(String name) => _nameToSyntax[name];
-
-  const Syntax(this.token, this.pattern);
-
-  final String token;
-  final String pattern;
-
-  @override
-  String toString() => '${runtimeType}("${token}")';
-}
-
 class _Patterns {
   // TODO: this could use some smarts.
   static final $import = new RegExp(r'[\w_/\d\:]+');
@@ -194,8 +92,8 @@ class _Patterns {
     r'[a-zA-Z_\$][\w\$]*'
   );
 
-  static final syntax = new RegExp(
-    Syntax.values.map((s) => s.pattern).join('|')
+  static final punctuation = new RegExp(
+    Punctuation.values.map((s) => s.pattern).join('|')
   );
 
   static final keyword = new RegExp(

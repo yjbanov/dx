@@ -6,7 +6,12 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 
+import 'package:dx/src/parser.dart';
 import 'package:dx/src/scanner.dart';
+import 'package:dx/src/token.dart';
+
+/// Set this to `true` to make the test print more debugging to stdout.
+const bool isDebug = false;
 
 void main() {
   final languageDirectory = new Directory('test/language');
@@ -14,12 +19,36 @@ void main() {
     throw 'Directory not found: ${languageDirectory.path}';
   }
 
-  group('language test', () {
-    for (File file in languageDirectory.listSync()) {
-      test('language test ${path.basename(file.path)}', () {
-        final scanner = new Scanner(Uri.parse(file.path), file.readAsStringSync());
-        scanner.forEach(print);
+  for (File file in languageDirectory.listSync()) {
+    group('language test ${path.basename(file.path)}', () {
+      String source;
+
+      setUp(() {
+        source = file.readAsStringSync();
       });
-    }
-  });
+
+      test('scanner', () {
+        if (isDebug) {
+          print(source);
+        }
+
+        final scanner = new Scanner(Uri.parse(file.path), source);
+        scanner.forEach((t) {
+          expect(t is Token, true);
+          if (isDebug) {
+            print(t);
+          }
+        });
+      });
+
+      test('parser', () {
+        final ast = parse(Uri.parse(file.path), source);
+        expect(ast is DxAst, true);
+        ast.toString();
+        if (isDebug) {
+          print(ast);
+        }
+      });
+    });
+  }
 }
