@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 
+import 'package:dx/src/emitter.dart';
 import 'package:dx/src/parser.dart';
 import 'package:dx/src/scanner.dart';
 import 'package:dx/src/token.dart';
@@ -19,7 +20,12 @@ void main() {
     throw 'Directory not found: ${languageDirectory.path}';
   }
 
-  for (File file in languageDirectory.listSync()) {
+  for (File file in languageDirectory.listSync().where((f) => f.path.endsWith('.dx'))) {
+    String expectedCode() {
+      final pathWithoutExtension = path.withoutExtension(file.path);
+      return new File('${pathWithoutExtension}.dart').readAsStringSync();
+    }
+
     group('language test ${path.basename(file.path)}', () {
       String source;
 
@@ -48,6 +54,12 @@ void main() {
         if (isDebug) {
           print(ast);
         }
+      });
+
+      test('emitter', () {
+        final ast = parse(Uri.parse(file.path), source);
+        final code = emit(ast);
+        expect(code, expectedCode());
       });
     });
   }

@@ -4,11 +4,28 @@
 
 import 'package:meta/meta.dart';
 
+import 'token.dart';
+
+/// The visitor interface for the visitor pattern implemented by the [Ast]
+/// tree.
+abstract class AstVisitor {
+  void visitDxAst(DxAst node);
+  void visitImportBlockAst(ImportBlockAst node);
+  void visitImportAst(ImportAst node);
+  void visitWidgetAst(WidgetAst node);
+  void visitStateAst(StateAst node);
+  void visitBuildAst(BuildAst node);
+}
+
 /// Common super-class of all AST node classes.
 ///
 /// An AST node is a deeply immutable data structure.
 @immutable
 abstract class Ast {
+  /// Calls a method of [AstVisitor] appropriate for the concrete
+  /// implementation of the [Ast] node.
+  void accept(AstVisitor visitor);
+
   @override
   String toString([int indent = 0]) {
     throw '$runtimeType forgot to implement toString([int indent = 0])';
@@ -49,6 +66,11 @@ class DxAst extends AstWithChildren<Ast> {
   DxAst({List<Ast> children}) : super(children: children);
 
   @override
+  void accept(AstVisitor visitor) {
+    visitor.visitDxAst(this);
+  }
+
+  @override
   String toString([int indent = 0]) {
     final result = new StringBuffer('$runtimeType(');
     if (children.isNotEmpty) {
@@ -73,29 +95,40 @@ class DxAstBuilder extends AstBuilder<DxAst>
 
 class ImportAst extends Ast {
   ImportAst({
-    @required this.path,
+    @required this.pathTokens,
   });
 
-  final String path;
+  final List<Token> pathTokens;
+
+  @override
+  void accept(AstVisitor visitor) {
+    visitor.visitImportAst(this);
+  }
 
   @override
   String toString([int indent = 0]) {
-    return _indent('$runtimeType($path)', by: indent);
+    return _indent('$runtimeType(${pathTokens.join()})', by: indent);
   }  
 }
 
 class ImportAstBuilder extends AstBuilder<ImportAst> {
-  final StringBuffer _path = new StringBuffer();
+  final List<Token> _pathTokens = <Token>[];
 
-  void append(String part) {
-    _path.write(part);
+  void append(Token part) {
+    assert(part is Identifier || part == Punctuation.$colon || part == Punctuation.$slash);
+    _pathTokens.add(part);
   }
 
-  ImportAst build() => new ImportAst(path: _path.toString());
+  ImportAst build() => new ImportAst(pathTokens: new List<Token>.unmodifiable(_pathTokens));
 }
 
 class ImportBlockAst extends AstWithChildren<ImportAst> {
   ImportBlockAst({List<ImportAst> children}) : super(children: children);
+
+  @override
+  void accept(AstVisitor visitor) {
+    visitor.visitImportBlockAst(this);
+  }
 
   @override
   String toString([int indent = 0]) {
@@ -123,16 +156,24 @@ class ImportBlockAstBuilder extends AstBuilder<ImportBlockAst>
 /// A widget class.
 class WidgetAst extends Ast {
   WidgetAst({
+    @required this.className,
     this.stateAst,
     @required this.buildAst,
   });
 
+  final String className;
   final StateAst stateAst;
   final BuildAst buildAst;
 
   @override
+  void accept(AstVisitor visitor) {
+    visitor.visitWidgetAst(this);
+  }
+
+  @override
   String toString([int indent = 0]) {
     final buf = new StringBuffer('$runtimeType(\n');
+    buf.writeln('  name: ${className}');
     if (stateAst != null) {
       buf.writeln('  state:\n${stateAst.toString(indent + 1)}');
     }
@@ -143,11 +184,13 @@ class WidgetAst extends Ast {
 }
 
 class WidgetAstBuilder extends AstBuilder<WidgetAst> {
+  String className;
   StateAst stateAst;
   BuildAst buildAst;
 
   @override
   WidgetAst build() => new WidgetAst(
+        className: className,
         stateAst: stateAst,
         buildAst: buildAst,
       );
@@ -156,6 +199,11 @@ class WidgetAstBuilder extends AstBuilder<WidgetAst> {
 /// State of a widget.
 class StateAst extends Ast {
   @override
+  void accept(AstVisitor visitor) {
+    visitor.visitStateAst(this);
+  }
+
+  @override
   String toString([int indent = 0]) {
     return _indent('$runtimeType()', by: indent);
   }  
@@ -163,6 +211,11 @@ class StateAst extends Ast {
 
 /// A build method.
 class BuildAst extends Ast {
+  @override
+  void accept(AstVisitor visitor) {
+    visitor.visitBuildAst(this);
+  }
+
   @override
   String toString([int indent = 0]) {
     return _indent('$runtimeType()', by: indent);
