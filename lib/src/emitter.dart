@@ -158,7 +158,13 @@ class _Emitter implements AstVisitor {
     final ClassBuilder enclosingClass = _ancestorContext((c) => c.context is ClassBuilder, ClassBuilder).context;
     final buildMethod = new MethodBuilder()
       ..name = 'build'
-      ..annotations.add(_overridesAnnotation);
+      ..annotations.add(_overridesAnnotation)
+      ..returns = new Reference('Widget')
+      ..requiredParameters.add((new ParameterBuilder()
+        ..type = new Reference('BuildContext')
+        ..name = 'context'
+      ).build())
+      ..body = new Code('');
     enclosingClass.methods.add(buildMethod.build());
     _pop();
   }

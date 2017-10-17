@@ -7,5 +7,5 @@ class Foo extends StatefulWidget {
 
 class FooState extends State<Foo> {
   @override
-  build();
+  Widget build(BuildContext context) {}
 }

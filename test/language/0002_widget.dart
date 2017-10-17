@@ -1,4 +1,4 @@
 class Foo extends StatelessWidget {
   @override
-  build();
+  Widget build(BuildContext context) {}
 }
