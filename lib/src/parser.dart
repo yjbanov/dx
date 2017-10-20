@@ -39,31 +39,36 @@ class _Parser {
     assert(_token == Keyword.$import);
 
     _advance();
-    _consume(Punctuation.$openBrace);
+    _consumeToken(Punctuation.$openBrace);
 
     final builder = new ImportBlockAstBuilder();
     while (_token is Identifier || _match(const [Punctuation.$slash, Punctuation.$colon])) {
       _parseImport(builder);
-      _consume(Punctuation.$semicolon);
+      _consumeToken(Punctuation.$semicolon);
     }
 
-    _consume(Punctuation.$closeBrace, allowEof: true);
+    _consumeToken(Punctuation.$closeBrace, allowEof: true);
     parent.addChild(builder.build());
   }
 
   bool _parseImport(ImportBlockAstBuilder parent) {
     final builder = new ImportAstBuilder();
 
+    bool expectIdentifier = true;
     while (_token != Punctuation.$semicolon) {
-      final token = _token;  // Need var for type inference.
-      if (token is Identifier) {
-        builder.append(token.name);
-      } else if (token == Punctuation.$slash || token == Punctuation.$colon) {
-        builder.append((token as Punctuation).token);
-      } else {
-        _unexpectedToken();
+      final token = _token;
+
+      if (expectIdentifier && token is! Identifier) {
+        _unexpectedToken(expected: 'identifier');
       }
+
+      if (!expectIdentifier && !(token == Punctuation.$slash || token == Punctuation.$colon)) {
+        _unexpectedToken(expected: ': or /');
+      }
+
+      builder.append(token);
       _advance();
+      expectIdentifier = !expectIdentifier;
     }
 
     parent.addChild(builder.build());
@@ -73,10 +78,14 @@ class _Parser {
   void _parseWidget(DxAstBuilder parent) {
     assert(_token == Keyword.$widget);
 
-    _advance();
-    _consume(Punctuation.$openBrace);
-
     final widget = new WidgetAstBuilder();
+
+    _advance();
+    final widgetName = _expect<Identifier>((t) => t is Identifier);
+    widget.className = widgetName.name;
+    _advance();
+    _consumeToken(Punctuation.$openBrace);
+
     while (_match(const <Token>[Keyword.$build, Keyword.$state])) {
       if (_token == Keyword.$build) {
         _parseBuild(widget);
@@ -85,7 +94,7 @@ class _Parser {
       }
     }
 
-    _consume(Punctuation.$closeBrace, allowEof: true);
+    _consumeToken(Punctuation.$closeBrace, allowEof: true);
     parent.addChild(widget.build());
   }
 
@@ -93,8 +102,8 @@ class _Parser {
     assert(_token == Keyword.$build);
 
     _advance();
-    _consume(Punctuation.$openBrace);
-    _consume(Punctuation.$closeBrace);
+    _consumeToken(Punctuation.$openBrace);
+    _consumeToken(Punctuation.$closeBrace);
     parent.buildAst = new BuildAst();
   }
 
@@ -102,24 +111,29 @@ class _Parser {
     assert(_token == Keyword.$state);
 
     _advance();
-    _consume(Punctuation.$openBrace);
-    _consume(Punctuation.$closeBrace);
+    _consumeToken(Punctuation.$openBrace);
+    _consumeToken(Punctuation.$closeBrace);
     parent.stateAst = new StateAst();
   }
 
-  void _consume(Token token, {allowEof: false}) {
-    _expect(token);
+  void _consumeToken(Token token, {allowEof: false}) {
+    _consume((t) => t == token, allowEof: allowEof);
+  }
+
+  void _consume(bool predicate(Token token), {allowEof: false}) {
+    _expect(predicate);
     _advance(allowEof: allowEof);
   }
 
-  void _expect(Token token) {
-    if (_token != token) {
+  T _expect<T extends Token>(bool predicate(Token token)) {
+    if (!predicate(_token)) {
       _unexpectedToken();
     }
+    return _token;
   }
 
-  void _unexpectedToken() {
-    throw new _ParserException('Unexpected token ${_token}');
+  void _unexpectedToken({String expected}) {
+    throw new _ParserException('Unexpected token ${_token}' + (expected != null ? '. Expected ${expected}.' : '.'));
   }
 
   bool _advance({bool allowEof: false}) {
